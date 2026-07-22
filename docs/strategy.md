@@ -78,20 +78,34 @@ the hedge is refreshed and the equity exposure it protects is kept intact.
 
 ## 5. Sizing
 
-How much to hedge is set by a **beta regression**. The tool regresses the daily returns of
-your stock holdings against SPX to estimate the portfolio's β, then reports the
-**SPX-equivalent notional** it carries, `β × stock value`. This β·stocks figure — not the
-raw dollar value of the stocks — is the exposure the puts are sized to cover, because it
-reflects how much the holdings actually move with the index a crash would hit. Beta is
+How much to hedge is set by a **beta regression**. The tool regresses the returns of
+*every* position declared in the portfolio sheet — stocks, ETFs, gold, anything with a
+market value — against SPX to estimate the portfolio's β, then reports the
+**SPX-equivalent notional** it carries, `β × portfolio value`. This β·portfolio figure —
+not the raw dollar value of the holdings — is the exposure the puts are sized to cover,
+because it reflects how much the whole basket actually moves with the index a crash would
+hit. A low-beta holding such as gold is not a stock and is not treated as one, but it is
+not ignored either: it sits in the regression alongside everything else and correctly
+dilutes the basket's beta down, exactly as it dilutes the real portfolio's sensitivity to a
+crash. The only line item deliberately left out of the table is cash: it has no return
+series to regress, but it still counts in the NAV that sets the budget below. Beta is
 reported across several look-back windows so you can see how stable it is rather than
 trusting a single number, and the regression R² tells you how much of the portfolio's risk
 SPX explains in the first place.
 
+When a non-US listing is declared, the regression switches automatically to weekly
+returns, because SPX and a non-US listing close at different times of day and the
+resulting asynchronous daily closes systematically understate the true beta. On FX the
+tool takes a deliberate stance: quotation currencies are never converted, so a position
+declared in EUR is regressed in EUR against SPX in USD, and the resulting β silently
+embeds the pair's average FX covariance over the look-back window — this is not a hedge
+and is not guaranteed to hold in a crash, when currency correlations can themselves shift.
+
 Sizing the coverage and setting the spend are two separate anchors on purpose: the
-**coverage** is driven by β·stocks (the real market risk), while the **budget** is a
-percentage of **total NAV** (including the bonds, alternatives and cash that dilute your
-overall risk). Insuring the equity risk while spending a fraction of the whole book keeps
-the premium honest relative to everything you own.
+**coverage** is driven by β·portfolio (the real market risk across everything you declared),
+while the **budget** is a percentage of **total NAV** (including the cash that dilutes your
+overall risk). Insuring the portfolio's actual market risk while spending a fraction of the
+whole book keeps the premium honest relative to everything you own.
 
 ## 6. The diagnostics: three model-free lenses and Breeden–Litzenberger
 
