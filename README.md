@@ -22,12 +22,12 @@ rule (why moneyness and not delta, why no profit target, why the budget is a tar
 not a fixed spend) lives in [docs/strategy.md](docs/strategy.md); this is the *mechanics*.
 
 1. **Size the problem.** With `--notional N` the tool covers N and treats it as the NAV.
-   With `--portfolio port.xlsx` it regresses your declared stocks against SPX and covers
-   the **β·stocks notional** (the SPX-equivalent risk your equity actually carries), while
-   the budget percentage applies to the **total NAV** you declared. Two different numbers,
-   used for two different things. Note the source: **what you protect is declared by
-   you** (spreadsheet or flag), never read from the broker — the equity you are hedging
-   may well live at another bank or broker entirely.
+   With `--portfolio port.xlsx` it regresses your declared positions against SPX and
+   covers the **β·portfolio notional** (the SPX-equivalent risk your portfolio actually
+   carries), while the budget percentage applies to the **total NAV** you declared. Two
+   different numbers, used for two different things. Note the source: **what you protect
+   is declared by you** (spreadsheet or flag), never read from the broker — the portfolio
+   you are hedging may well live at another bank or broker entirely.
 2. **Read your hedge book — read-only.** The *protection you already own* comes from the
    other source: the tool pulls the account portfolio from IBKR and classifies as "hedge"
    every **long put on SPX, SPY or XSP** — the puts bought in previous cycles, with their
@@ -189,25 +189,59 @@ first position in the book drops to the roll trigger. Every run is also written 
 
 ## Using your real portfolio
 
-Instead of `--notional`, point the tool at a portfolio spreadsheet. The **first** run
-with a path that does not yet exist creates a template and stops:
+There are two ways to tell the tool what to protect. `--notional` is the direct route:
+you decide the number, and it is both the capital to cover and the NAV the budget
+percentage applies to — no sheet, no regression, an implicit β = 1. `--portfolio` is the
+declarative route: you list your actual positions, the tool regresses them against SPX to
+estimate β, and it covers β·portfolio while the budget percentage still applies to the
+total NAV you declared.
+
+That split matters when the capital you want covered is smaller than your total wealth.
+Say your total wealth is $500,000, but only $350,000 of it is the book you actually want
+the SPX puts to cover — the rest sits in assets you are not hedging. Passing
+`--notional 350000 --budget-pct 0.0143` spends 0.0143 × $350,000 ≈ $5,000/year, the same
+yearly budget that 1% of the full $500,000 would have given: the budget stays anchored to
+your whole wealth even though the notional it is a percentage of has shrunk to the piece
+you are actually covering.
+
+The **first** `--portfolio` run with a path that does not yet exist creates a template and
+stops:
 
 ```bash
 python -m tailhedge.hedge_cli --portfolio port.xlsx --budget-pct 0.01 --r 0.04
-# Template created at port.xlsx: fill in your stocks + total NAV, then re-run.
+# Template created at port.xlsx: fill in your positions + total NAV (USD), then re-run.
 ```
 
-Fill it in and re-run the same command. The template asks for two things:
+Fill it in and re-run the same command. The template asks for:
 
-- **Only the stocks** used for the beta regression — US-listed symbols the tool resolves
-  on IBKR as `STK/SMART/USD`. Leave out bonds, alternatives and cash; they are not part
-  of the equity beta.
-- The **total NAV** of the portfolio, which is the base the budget percentage applies to.
+- **All portfolio positions** — stocks, ETFs, gold, anything else you hold, not stocks
+  only. Cash is the one thing left out of the table: it counts only in the total NAV
+  below. The beta regression weighs every position you list.
+- **All values in USD.** Convert once when you fill in the sheet; the budget itself meets
+  USD option premiums, so a single consistent currency keeps the sizing honest.
+- The **total NAV** of the portfolio, the base the budget percentage applies to.
+- Two optional columns after `market_value`, **`exchange`** and **`currency`**, for
+  positions not listed on a US exchange — e.g. `SXR8 / IBIS / EUR` or
+  `VUSA / BVME.ETF / EUR`. Leave both empty and the ticker resolves exactly as before, as
+  `STK/SMART/USD` — identical behavior to a plain US listing.
 
-From the stock table the tool runs a β regression of your holdings against SPX and reports
-the **β·stocks coverage** — the SPX-equivalent notional your equity actually carries —
-alongside the cycle budget computed on the total NAV. That way the hedge is sized to the
-risk your stocks contribute, while the spend is anchored to the whole book.
+From the position table the tool runs a β regression against SPX and reports the
+**β·portfolio coverage** — the SPX-equivalent notional your holdings actually carry —
+alongside the cycle budget computed on the total NAV.
+
+**Regression frequency** — declaring at least one non-US listing switches the beta
+regression from daily to weekly returns automatically (`--returns-freq auto`, the
+default): asynchronous EU/US closing times understate the true beta when it is measured
+day over day. Override with `--returns-freq daily` or `--returns-freq weekly`. The
+default lookback window is 250 observations for daily returns, 52 for weekly; `--window`
+overrides it directly (104 weekly observations ≈ the common two-year convention).
+
+**Currency is never converted, by design** — a non-US position enters the regression
+priced in its own quotation currency, so the beta it contributes carries the average FX
+covariance between that currency and the dollar, baked in over the lookback window. That
+FX exposure is not hedged by the SPX puts, and there is no guarantee it cushions anything
+in an actual crash. The run report repeats this caveat whenever at least one non-US
+listing is declared.
 
 The two numeric flags in the command do very different jobs:
 
