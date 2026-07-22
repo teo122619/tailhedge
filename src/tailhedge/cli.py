@@ -37,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--nav", type=float, default=None)
     p.add_argument("--windows", default="120,250")
     p.add_argument("--lookback", type=int, default=756)
+    p.add_argument("--returns-freq", choices=("daily", "weekly"), default="daily",
+                   help="regression frequency (no auto: this CLI has no listings input)")
     a = p.parse_args(argv)
 
     pos_df = pd.read_csv(a.positions)
@@ -56,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
                         windows=windows,
                         lookback_days=a.lookback,
                         nav=a.nav,
+                        freq=a.returns_freq,
                     )
             except OSError as e:   # ConnectionRefusedError, timeout, host unreachable
                 from tailhedge.config import IBKRConfig
@@ -77,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
                 windows=windows,
                 lookback_days=a.lookback,
                 nav=a.nav,
+                freq=a.returns_freq,
             )
     except InsufficientDataError as e:
         print(f"Data error: {e}", file=sys.stderr)

@@ -130,7 +130,10 @@ def _build_parser() -> argparse.ArgumentParser:
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--portfolio", help="portfolio spreadsheet (stocks + total NAV); created if missing")
     g.add_argument("--notional", type=float, help="already-known notional to cover (coverage = NAV budget)")
-    p.add_argument("--window", type=int, default=250, help="beta window (with --portfolio)")
+    p.add_argument("--window", type=int, default=None,
+                   help="beta window in observations (default: 250 daily / 52 weekly)")
+    p.add_argument("--returns-freq", choices=("auto", "daily", "weekly"), default="auto",
+                   help="regression frequency; auto = weekly when a non-US listing is declared")
     p.add_argument("--lookback", type=int, default=756)
     p.add_argument("--band", type=float, default=0.35,
                    help="OTM band of the chain (0.35 also covers the deep OTM of the -40%% lens)")
@@ -176,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     # Portfolio: scaffold-if-missing, then load (local, before IBKR)
     positions = None
     budget_nav = None
+    listings = {}
     if a.portfolio:
         from tailhedge.portfolio import load_portfolio, write_template
         if not Path(a.portfolio).exists():
@@ -183,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Template created at {a.portfolio}: fill in your positions + total NAV (USD), then re-run.")
             return 0
         try:
-            positions, budget_nav, _listings = load_portfolio(a.portfolio)
+            positions, budget_nav, listings = load_portfolio(a.portfolio)
         except ValueError as e:
             print(f"Portfolio error: {e}", file=sys.stderr)
             return 1
@@ -195,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
         fetch_put_chain,
         fetch_spot,
     )
-    from tailhedge.sizing import InsufficientDataError, run_sizing
+    from tailhedge.sizing import FX_CAVEAT, InsufficientDataError, resolve_freq_window, run_sizing
 
     def _fetch(ib, inst, expiry):
         """(spot, chain) for one instrument at expiry `expiry`.
@@ -218,14 +222,18 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with IBKRConnection() as ib:
             if a.portfolio:
-                rep = run_sizing(IBKRPriceHistoryProvider(ib), positions=positions,
-                                 spx_ticker="SPX", windows=[a.window], lookback_days=a.lookback)
-                coverage_notional = rep.notional_by_window[a.window]
+                freq, window = resolve_freq_window(a.returns_freq, a.window, bool(listings))
+                rep = run_sizing(IBKRPriceHistoryProvider(ib, listings=listings),
+                                 positions=positions, spx_ticker="SPX",
+                                 windows=[window], lookback_days=a.lookback, freq=freq)
+                coverage_notional = rep.notional_by_window[window]
                 sizing_note = (
-                    f"Sizing: stocks declared ${rep.nav:,.0f}, total NAV ${budget_nav:,.0f}, "
-                    f"window {a.window} → coverage ${coverage_notional:,.0f} "
+                    f"Sizing: positions declared ${rep.nav:,.0f}, total NAV ${budget_nav:,.0f}, "
+                    f"window {window} ({freq}) → coverage ${coverage_notional:,.0f} "
                     f"(R² {float(rep.sensitivity['r_squared'].iloc[0]):.2f})"
                 )
+                if listings:
+                    sizing_note += "\n" + FX_CAVEAT
             else:
                 coverage_notional = a.notional
                 budget_nav = a.notional

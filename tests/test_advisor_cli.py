@@ -231,3 +231,10 @@ def test_connection_error_is_clean(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "Cannot connect to TWS/IB Gateway" in err
     assert "Traceback" not in err
+
+
+def test_advisor_parser_freq_defaults():
+    p = advisor_cli._build_parser()
+    a = p.parse_args(["--expiries", "20261218", "--notional", "500000"])
+    assert a.returns_freq == "auto"
+    assert a.window is None
