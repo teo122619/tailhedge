@@ -36,8 +36,20 @@ def test_cli_weekly_freq_runs_on_csv(tmp_path, capsys):
     rc = main([
         "--prices", str(tmp_path / "prices.csv"),
         "--positions", str(tmp_path / "positions.csv"),
-        "--windows", "12", "--lookback", "120",
+        "--windows", "100", "--lookback", "120",
         "--returns-freq", "weekly",
     ])
     assert rc == 0
-    assert "window=" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "window=" in out
+
+    # 120 business days resampled W-FRI give 24 weekly closes -> 23 weekly
+    # returns. A silently-daily run (freq dropped) would print n_obs=100
+    # instead, so this discriminates broken `freq` wiring from a passing run.
+    sensitivity_lines = out.splitlines()
+    header_idx = next(
+        i for i, line in enumerate(sensitivity_lines)
+        if line.split() == ["window", "beta", "r_squared", "n_obs"]
+    )
+    n_obs = sensitivity_lines[header_idx + 1].split()[-1]
+    assert n_obs == "23"
