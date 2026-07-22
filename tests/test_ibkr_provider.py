@@ -61,9 +61,9 @@ def test_provider_uses_listing_for_contract():
         return orig(*contracts)
 
     ib.qualifyContracts = spy
-    prov = IBKRPriceHistoryProvider(ib, listings={"SXR8": ("IBIS", "EUR")})
+    prov = IBKRPriceHistoryProvider(ib, listings={"SXR8": ("IBIS2", "EUR")})
     prov.daily_closes("SXR8", lookback_days=250)
-    assert seen["c"].exchange == "IBIS"
+    assert seen["c"].exchange == "IBIS2"
     assert seen["c"].currency == "EUR"
 
 

@@ -221,7 +221,7 @@ Fill it in and re-run the same command. The template asks for:
   USD option premiums, so a single consistent currency keeps the sizing honest.
 - The **total NAV** of the portfolio, the base the budget percentage applies to.
 - Two optional columns after `market_value`, **`exchange`** and **`currency`**, for
-  positions not listed on a US exchange — e.g. `SXR8 / IBIS / EUR` or
+  positions not listed on a US exchange — e.g. `SXR8 / IBIS2 / EUR` or
   `VUSA / BVME.ETF / EUR`. Leave both empty and the ticker resolves exactly as before, as
   `STK/SMART/USD` — identical behavior to a plain US listing.
 

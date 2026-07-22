@@ -170,7 +170,7 @@ class IBKRPriceHistoryProvider:
                 f"Ticker '{ticker}' not recognized by IBKR as "
                 f"{contract.secType}/{contract.exchange}/{contract.currency}. "
                 "For non-US instruments, fill the exchange and currency columns in the "
-                "portfolio sheet (e.g. SXR8 / IBIS / EUR)."
+                "portfolio sheet (e.g. SXR8 / IBIS2 / EUR)."
                 + _candidate_listings(self._ib, contract.symbol, cur)
             )
         bars = self._ib.reqHistoricalData(

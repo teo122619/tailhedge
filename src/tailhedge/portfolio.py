@@ -11,7 +11,7 @@ from __future__ import annotations
 _TEMPLATE_EXAMPLES = [
     ("AAPL", 150_000, None, None),
     ("VOO", 330_000, None, None),
-    ("SXR8", 120_000, "IBIS", "EUR"),
+    ("SXR8", 120_000, "IBIS2", "EUR"),
 ]
 
 
@@ -26,7 +26,7 @@ def write_template(path) -> None:
                 "(stocks, ETFs, gold, ...): the beta regression weighs each one.")
     ws["A2"] = "Cash: do NOT list it, it only counts in the total NAV below. ALL values in USD."
     ws["A3"] = ("US-listed instruments: ticker only (resolved as STK/SMART/USD). Non-US "
-                "listings: fill exchange and currency (e.g. SXR8 / IBIS / EUR, "
+                "listings: fill exchange and currency (e.g. SXR8 / IBIS2 / EUR, "
                 "VUSA / BVME.ETF / EUR).")
     ws["A4"] = "Total NAV of the portfolio (USD):"
     ws["B4"] = 1_000_000

@@ -111,7 +111,7 @@ def test_load_raises_on_non_xlsx_file(tmp_path):
 
 
 def test_template_documents_and_carries_non_us_listing_columns(tmp_path):
-    """The template deliberately ships a non-US example (SXR8 on IBIS/EUR): the
+    """The template deliberately ships a non-US example (SXR8 on IBIS2/EUR): the
     sheet must document how to fill exchange/currency for such listings, and
     the example row itself must carry that listing in columns C/D, not just
     describe it in prose."""
@@ -129,7 +129,7 @@ def test_template_documents_and_carries_non_us_listing_columns(tmp_path):
 
     positions, _, listings = load_portfolio(path)
     assert positions["SXR8"] == 120_000.0
-    assert listings["SXR8"] == ("IBIS", "EUR")
+    assert listings["SXR8"] == ("IBIS2", "EUR")
 
 
 def test_template_has_listing_columns_and_usd_label(tmp_path):
@@ -146,11 +146,11 @@ def test_load_returns_listings_for_declared_rows(tmp_path):
     path = tmp_path / "p.xlsx"
     _make_xlsx(path, 1_000_000,
                {"AAPL": 150_000, "SXR8": 120_000, "VUSA": 330_000},
-               listings={"SXR8": ("ibis", "eur"), "VUSA": (None, "EUR")})
+               listings={"SXR8": ("ibis2", "eur"), "VUSA": (None, "EUR")})
     positions, nav, listings = load_portfolio(str(path))
     assert positions["SXR8"] == 120_000.0
     # lowercase declared exchange round-trips uppercase, symmetric with currency
-    assert listings == {"SXR8": ("IBIS", "EUR"), "VUSA": (None, "EUR")}
+    assert listings == {"SXR8": ("IBIS2", "EUR"), "VUSA": (None, "EUR")}
 
 
 def test_load_old_sheet_without_listing_columns_is_unchanged(tmp_path):
