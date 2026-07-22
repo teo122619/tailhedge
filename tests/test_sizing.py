@@ -112,3 +112,41 @@ def test_run_sizing_raises_clear_error_on_empty_history():
     prov = FakePriceHistoryProvider({"SPX": spx_px, "A": empty})
     with pytest.raises(InsufficientDataError, match="A"):
         run_sizing(prov, positions={"A": 100.0}, spx_ticker="SPX", windows=[250], lookback_days=300)
+
+
+def test_resolve_freq_window_policy():
+    from tailhedge.sizing import resolve_freq_window
+    assert resolve_freq_window("auto", None, has_listings=True) == ("weekly", 52)
+    assert resolve_freq_window("auto", None, has_listings=False) == ("daily", 250)
+    assert resolve_freq_window("weekly", 104, has_listings=False) == ("weekly", 104)
+    assert resolve_freq_window("daily", None, has_listings=True) == ("daily", 250)
+
+
+def test_run_sizing_rejects_unknown_freq():
+    idx = pd.bdate_range("2024-01-02", periods=10)
+    prov = FakePriceHistoryProvider({
+        "AAA": pd.Series(100.0, index=idx), "SPX": pd.Series(100.0, index=idx)})
+    with pytest.raises(ValueError, match="freq"):
+        run_sizing(prov, {"AAA": 1.0}, "SPX", [5], 10, freq="monthly")
+
+
+def test_weekly_freq_recovers_beta_hidden_by_stale_closes():
+    # EU-style series: identical exposure to SPX but closes one day late.
+    # Daily regression sees ~0 beta (iid returns, lag 1); weekly overlaps 4/5 days.
+    rng = np.random.default_rng(0)
+    n = 756
+    idx = pd.bdate_range("2022-01-03", periods=n)
+    spx_ret = rng.normal(0.0, 0.01, size=n)
+    eu_ret = np.concatenate([[0.0], spx_ret[:-1]])  # one-day stale echo of SPX
+    spx = pd.Series(100 * np.cumprod(1 + spx_ret), index=idx)
+    eu = pd.Series(100 * np.cumprod(1 + eu_ret), index=idx)
+    prov = FakePriceHistoryProvider({"EU": eu, "SPX": spx})
+
+    daily = run_sizing(prov, {"EU": 1_000.0}, "SPX", [250], n, freq="daily")
+    weekly = run_sizing(prov, {"EU": 1_000.0}, "SPX", [52], n, freq="weekly")
+
+    beta_daily = float(daily.sensitivity["beta"].iloc[0])
+    beta_weekly = float(weekly.sensitivity["beta"].iloc[0])
+    assert abs(beta_daily) < 0.3
+    assert beta_weekly > 0.55
+    assert int(weekly.sensitivity["n_obs"].iloc[0]) <= 52

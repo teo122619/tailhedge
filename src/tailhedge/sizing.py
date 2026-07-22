@@ -90,6 +90,22 @@ def hedge_notional(beta: float, nav: float) -> float:
     return beta * nav
 
 
+FX_CAVEAT = ("Beta measured in quotation currencies: average FX covariance "
+             "embedded — not hedged, and not guaranteed to cushion a crash.")
+
+
+def resolve_freq_window(returns_freq: str, window: int | None,
+                        has_listings: bool) -> tuple[str, int]:
+    """CLI policy for regression frequency and default window.
+
+    `auto` picks weekly when any non-US listing is declared (asynchronous EU/US
+    closes understate daily betas); explicit `window` is taken as observations
+    in the resolved frequency (defaults: 250 daily / 52 weekly).
+    """
+    freq = returns_freq if returns_freq != "auto" else ("weekly" if has_listings else "daily")
+    return freq, window if window is not None else (52 if freq == "weekly" else 250)
+
+
 @dataclass(frozen=True)
 class SizingReport:
     nav: float
@@ -105,13 +121,17 @@ def run_sizing(
     windows: list[int],
     lookback_days: int,
     nav: float | None = None,
+    freq: str = "daily",
 ) -> SizingReport:
     """Orchestrator: downloads history via the provider, estimates beta/R² by
     window, and the SPX-equivalent notional to hedge.
 
     `positions` are the current market values per ticker; if `nav` is None, uses
-    the sum of the market values.
+    the sum of the market values. `freq` controls return frequency: "daily" or
+    "weekly" (W-FRI resample to neutralize EU/US close-time asynchrony).
     """
+    if freq not in ("daily", "weekly"):
+        raise ValueError(f"freq must be 'daily' or 'weekly', got '{freq}'")
     nav = float(sum(positions.values())) if nav is None else float(nav)
     weights = weights_from_positions(positions)
     cols = {t: provider.daily_closes(t, lookback_days) for t in positions}
@@ -127,6 +147,9 @@ def run_sizing(
             "then logout/login in TWS and retry)."
         )
     prices = pd.DataFrame(cols).dropna(how="any")
+    if freq == "weekly":
+        # Last common close of each week: neutralizes the EU/US close-time gap.
+        prices = prices.resample("W-FRI").last().dropna(how="any")
     if len(prices) < 2:
         raise InsufficientDataError(
             f"Histories misaligned or too short (usable rows: {len(prices)}). "
