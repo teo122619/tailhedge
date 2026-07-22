@@ -25,9 +25,14 @@ not a fixed spend) lives in [docs/strategy.md](docs/strategy.md); this is the *m
    With `--portfolio port.xlsx` it regresses your declared stocks against SPX and covers
    the **β·stocks notional** (the SPX-equivalent risk your equity actually carries), while
    the budget percentage applies to the **total NAV** you declared. Two different numbers,
-   used for two different things.
-2. **Read your hedge book — read-only.** It pulls the account portfolio from IBKR and
-   classifies as "hedge" every **long put on SPX, SPY or XSP**. Everything else (calls,
+   used for two different things. Note the source: **what you protect is declared by
+   you** (spreadsheet or flag), never read from the broker — the equity you are hedging
+   may well live at another bank or broker entirely.
+2. **Read your hedge book — read-only.** The *protection you already own* comes from the
+   other source: the tool pulls the account portfolio from IBKR and classifies as "hedge"
+   every **long put on SPX, SPY or XSP** — the puts bought in previous cycles, with their
+   live DTE and marks (needed for rolls and budget). On your very first run this book is
+   simply empty. Everything else (calls,
    spreads, stock, other underlyings) is ignored by construction, so any other strategy
    you run on the same account never collides with it. `--exclude-conids` removes
    specific positions from the book by contract id. A position with no valid mark
