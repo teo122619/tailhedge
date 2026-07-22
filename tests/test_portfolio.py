@@ -4,12 +4,12 @@ from openpyxl import Workbook
 from tailhedge.portfolio import write_template, load_portfolio
 
 
-def _make_xlsx(path, nav, positions, trailing_junk=False):
+def _make_xlsx(path, nav, positions, trailing_junk=False, listings=None):
     """Builds a .xlsx with the template's marker-based layout (extra rows tolerated)."""
     wb = Workbook()
     ws = wb.active
     ws["A1"] = "Tail-hedge — fill in and save."
-    ws["A3"] = "Total NAV of the portfolio (EUR):"
+    ws["A3"] = "Total NAV of the portfolio (USD):"
     ws["B3"] = nav
     ws["A5"] = "ticker"
     ws["B5"] = "market_value"
@@ -17,6 +17,10 @@ def _make_xlsx(path, nav, positions, trailing_junk=False):
     for t, v in positions.items():
         ws[f"A{r}"] = t
         ws[f"B{r}"] = v
+        if listings and t in listings:
+            exch, cur = listings[t]
+            ws[f"C{r}"] = exch
+            ws[f"D{r}"] = cur
         r += 1
     if trailing_junk:
         r += 1  # empty row
@@ -27,7 +31,7 @@ def _make_xlsx(path, nav, positions, trailing_junk=False):
 def test_write_template_then_load_roundtrip(tmp_path):
     path = tmp_path / "port.xlsx"
     write_template(str(path))
-    positions, nav = load_portfolio(str(path))
+    positions, nav, _ = load_portfolio(str(path))
     assert nav > 0
     assert len(positions) >= 1
     assert all(v > 0 for v in positions.values())
@@ -36,7 +40,7 @@ def test_write_template_then_load_roundtrip(tmp_path):
 def test_load_parses_positions_and_nav(tmp_path):
     path = tmp_path / "p.xlsx"
     _make_xlsx(path, 1_000_000, {"AAPL": 150_000, "MSFT": 120_000, "VUSA": 330_000})
-    positions, nav = load_portfolio(str(path))
+    positions, nav, _ = load_portfolio(str(path))
     assert nav == 1_000_000.0
     assert positions == {"AAPL": 150_000.0, "MSFT": 120_000.0, "VUSA": 330_000.0}
 
@@ -44,7 +48,7 @@ def test_load_parses_positions_and_nav(tmp_path):
 def test_load_stops_at_empty_row_and_ignores_junk(tmp_path):
     path = tmp_path / "p.xlsx"
     _make_xlsx(path, 800_000, {"AAPL": 100_000}, trailing_junk=True)
-    positions, nav = load_portfolio(str(path))
+    positions, nav, _ = load_portfolio(str(path))
     assert positions == {"AAPL": 100_000.0}  # the note row after the blank one is ignored
 
 
@@ -115,9 +119,38 @@ def test_template_only_suggests_us_symbols_and_says_so(tmp_path):
 
     path = tmp_path / "t.xlsx"
     write_template(path)
-    positions, _ = load_portfolio(path)
+    positions, _, _ = load_portfolio(path)
     assert "VUSA" not in positions          # no non-US symbol among the examples
     assert "VOO" in positions
     ws = openpyxl.load_workbook(path).active
     text = " ".join(str(c.value) for r in ws.iter_rows() for c in r if c.value)
     assert "USA" in text        # the constraint must be stated in the sheet, not discovered at runtime
+
+
+def test_template_has_listing_columns_and_usd_label(tmp_path):
+    path = tmp_path / "port.xlsx"
+    write_template(str(path))
+    from openpyxl import load_workbook
+    ws = load_workbook(str(path)).active
+    assert "USD" in ws["A4"].value
+    assert ws["C6"].value == "exchange"
+    assert ws["D6"].value == "currency"
+
+
+def test_load_returns_listings_for_declared_rows(tmp_path):
+    path = tmp_path / "p.xlsx"
+    _make_xlsx(path, 1_000_000,
+               {"AAPL": 150_000, "SXR8": 120_000, "VUSA": 330_000},
+               listings={"SXR8": ("IBIS", "eur"), "VUSA": (None, "EUR")})
+    positions, nav, listings = load_portfolio(str(path))
+    assert positions["SXR8"] == 120_000.0
+    assert listings == {"SXR8": ("IBIS", "EUR"), "VUSA": (None, "EUR")}
+
+
+def test_load_old_sheet_without_listing_columns_is_unchanged(tmp_path):
+    path = tmp_path / "p.xlsx"
+    _make_xlsx(path, 800_000, {"AAPL": 100_000, "VOO": 300_000})
+    positions, nav, listings = load_portfolio(str(path))
+    assert positions == {"AAPL": 100_000.0, "VOO": 300_000.0}
+    assert nav == 800_000.0
+    assert listings == {}

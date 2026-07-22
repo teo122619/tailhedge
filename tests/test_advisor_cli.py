@@ -151,7 +151,7 @@ def test_main_scaffolds_missing_portfolio(tmp_path):
     assert rc == 0
     assert path.exists()                       # template created without touching IBKR
     from tailhedge.portfolio import load_portfolio
-    positions, nav = load_portfolio(str(path))
+    positions, nav, _ = load_portfolio(str(path))
     assert positions and nav > 0
 
 

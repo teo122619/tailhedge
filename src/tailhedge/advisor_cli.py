@@ -180,10 +180,10 @@ def main(argv: list[str] | None = None) -> int:
         from tailhedge.portfolio import load_portfolio, write_template
         if not Path(a.portfolio).exists():
             write_template(a.portfolio)
-            print(f"Template created at {a.portfolio}: fill in your stocks + total NAV, then re-run.")
+            print(f"Template created at {a.portfolio}: fill in your positions + total NAV (USD), then re-run.")
             return 0
         try:
-            positions, budget_nav = load_portfolio(a.portfolio)
+            positions, budget_nav, _listings = load_portfolio(a.portfolio)
         except ValueError as e:
             print(f"Portfolio error: {e}", file=sys.stderr)
             return 1
