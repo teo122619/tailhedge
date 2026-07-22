@@ -15,6 +15,63 @@ can afford), the expiry sits in a 90–180 day window, purchases run on a bimont
 budget, and positions are rolled at 30 days to expiry with no profit target. Every price
 that enters a decision comes from the live IBKR option chain; nothing is a model price.
 
+## How a run works
+
+Every `hedge_cli` run walks the same eleven steps, in order. The *rationale* behind each
+rule (why moneyness and not delta, why no profit target, why the budget is a target and
+not a fixed spend) lives in [docs/strategy.md](docs/strategy.md); this is the *mechanics*.
+
+1. **Size the problem.** With `--notional N` the tool covers N and treats it as the NAV.
+   With `--portfolio port.xlsx` it regresses your declared stocks against SPX and covers
+   the **β·stocks notional** (the SPX-equivalent risk your equity actually carries), while
+   the budget percentage applies to the **total NAV** you declared. Two different numbers,
+   used for two different things.
+2. **Read your hedge book — read-only.** It pulls the account portfolio from IBKR and
+   classifies as "hedge" every **long put on SPX, SPY or XSP**. Everything else (calls,
+   spreads, stock, other underlyings) is ignored by construction, so any other strategy
+   you run on the same account never collides with it. `--exclude-conids` removes
+   specific positions from the book by contract id. A position with no valid mark
+   (market closed, no data) stops the run with a clear message rather than producing a
+   wrong budget.
+3. **Decide the rolls.** Every put in the book at **DTE ≤ 30** (`--roll-dte`) gets a
+   SELL ticket at its IBKR mark, with the cycle rule attached: reinvest the proceeds in
+   equity the same day. No profit target, no stop — time to expiry is the only exit
+   trigger.
+4. **Compute the cycle budget.** The per-cycle target is `T = NAV × budget-pct /
+   cycles-per-year` (bimonthly by default). What you may spend today is `T` **minus the
+   mark-to-market of the book that survives the rolls**, floored at zero. This is the
+   anti-chasing rule: after a crash your surviving puts are worth more than the target,
+   the available budget reads $0, and the tool refuses to buy protection at post-crash
+   prices until positions roll off.
+5. **Fetch candidates.** For SPX first: every expiry inside the **DTE 90–180** window
+   (`--dte-range`), every strike inside the **35–45% OTM** band (`--band`), with live
+   bid/ask and streamed greeks.
+6. **Filter for liquidity.** Dead quotes (bid or ask ≤ 0, IBKR's −1 sentinels), crossed
+   quotes (bid > ask) and relative spreads above 25% are rejected. Only strikes with a
+   real, tradeable market survive.
+7. **Slide down the band to what you can afford.** Among the survivors, keep the
+   contracts whose **ask × multiplier fits the available budget**, then pick the
+   **highest strike** (the least OTM one). This is the affordability slide: the tool
+   starts at the top of the band and slides deeper only as far as the budget forces it.
+   Delta is printed for information but is **never** a selection criterion.
+8. **Fall back on granularity.** If the budget cannot buy even one SPX contract, the same
+   selection reruns on **SPY** (~1/10 the notional per contract). If SPY cannot buy one
+   either, the report says so and names the cheapest contract in the band — skip the
+   cycle or raise the pct; the tool never stretches the rules to force a trade.
+9. **Break expiry ties deterministically.** If the chosen strike exists on several
+   expiries: tightest relative spread first, then the expiry closest to DTE 135, then the
+   shortest. Same inputs, same ticket, every time.
+10. **Build the ticket.** Quantity is sized at the **ask** (what you actually pay when
+    you cross the spread); the price shown is the mid. By construction the total premium
+    never exceeds the available budget.
+11. **Print, save, stop.** The report comes out in three sections — **ACTIONS** (the
+    tickets), **BOOK** (your hedge positions vs the cycle target), **DIAGNOSTICS** (the
+    Breeden–Litzenberger density: market-implied crash probabilities and the cheapest
+    zone of the smile) — plus the **next recommended check**, the earlier of the next
+    cycle date and the first day a position hits the roll trigger. Everything is written
+    to `./runs/` with a timestamped name. Then the tool exits: whether any order is
+    actually placed is entirely up to you, in TWS.
+
 ## Requirements
 
 - An **Interactive Brokers** account.
