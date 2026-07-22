@@ -36,8 +36,12 @@ class ContractSpec:
     currency: str = "USD"
 
 
-def resolve_contract(ticker: str) -> ContractSpec:
+def resolve_contract(ticker: str, exchange: str | None = None,
+                     currency: str | None = None) -> ContractSpec:
     t = ticker.upper()
+    if exchange or currency:
+        # Declared listing (portfolio sheet columns): always a stock/ETF line.
+        return ContractSpec("STK", t, exchange or "SMART", (currency or "USD").upper())
     if t in _INDEX_EXCHANGE:
         return ContractSpec("IND", t, _INDEX_EXCHANGE[t], "USD")
     return ContractSpec("STK", t, "SMART", "USD")
@@ -135,25 +139,36 @@ class IBKRConnection:
             self._ib.disconnect()
 
 
+def _candidate_listings(ib, symbol: str, currency: str | None) -> str:
+    """Best-effort ' Candidates: ...' suffix from reqContractDetails; '' on any failure."""
+    try:
+        from ib_async import Stock
+        details = ib.reqContractDetails(Stock(symbol, "", currency or ""))
+        pairs = sorted({f"{d.contract.primaryExchange or d.contract.exchange}/"
+                        f"{d.contract.currency}" for d in details})
+        return f" Candidates: {', '.join(pairs)}." if pairs else ""
+    except Exception:
+        return ""
+
+
 class IBKRPriceHistoryProvider:
     """Implements PriceHistoryProvider on top of real IBKR data."""
 
-    def __init__(self, ib):
+    def __init__(self, ib, listings: dict[str, tuple[str | None, str | None]] | None = None):
         self._ib = ib
+        self._listings = listings or {}
 
     def daily_closes(self, ticker: str, lookback_days: int) -> pd.Series:
-        contract = to_ib_contract(resolve_contract(ticker))
+        exch, cur = self._listings.get(ticker, (None, None))
+        contract = to_ib_contract(resolve_contract(ticker, exch, cur))
         self._ib.qualifyContracts(contract)
-        # conId 0 = IBKR did not recognize the symbol (Error 200). Say it here, where
-        # the cause is known: further downstream it just becomes an empty series,
-        # indistinguishable from a connection problem.
         if not getattr(contract, "conId", 0):
             raise MarketDataUnavailableError(
                 f"Ticker '{ticker}' not recognized by IBKR as "
                 f"{contract.secType}/{contract.exchange}/{contract.currency}. "
-                "If it's a non-US stock or ETF (e.g. VUSA on LSE), it must be given with "
-                "the symbol of the exchange it's listed on: this tool currently only "
-                "resolves STK/SMART/USD and the CBOE indices."
+                "For non-US instruments, fill the exchange and currency columns in the "
+                "portfolio sheet (e.g. SXR8 / IBIS / EUR)."
+                + _candidate_listings(self._ib, contract.symbol, cur)
             )
         bars = self._ib.reqHistoricalData(
             contract,

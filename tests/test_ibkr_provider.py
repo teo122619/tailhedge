@@ -49,3 +49,26 @@ def test_unresolved_ticker_names_the_symbol_not_the_connection():
     with pytest.raises(MarketDataUnavailableError, match="VUSA"):
         prov.daily_closes("VUSA", lookback_days=250)
     assert ib.hist_calls == 0   # historical data isn't requested for a non-existent contract
+
+
+def test_provider_uses_listing_for_contract(monkeypatch):
+    ib = _FakeIB(_bars())
+    seen = {}
+    orig = ib.qualifyContracts
+
+    def spy(*contracts):
+        seen["c"] = contracts[0]
+        return orig(*contracts)
+
+    ib.qualifyContracts = spy
+    prov = IBKRPriceHistoryProvider(ib, listings={"SXR8": ("IBIS", "EUR")})
+    prov.daily_closes("SXR8", lookback_days=250)
+    assert seen["c"].exchange == "IBIS"
+    assert seen["c"].currency == "EUR"
+
+
+def test_provider_unresolved_error_mentions_listing_columns():
+    ib = _FakeIB(_bars(), resolves=False)
+    prov = IBKRPriceHistoryProvider(ib)
+    with pytest.raises(MarketDataUnavailableError, match="exchange and currency columns"):
+        prov.daily_closes("VUSA", lookback_days=250)

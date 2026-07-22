@@ -45,6 +45,21 @@ def test_resolve_contract_index_vs_stock():
     assert resolve_contract("AAPL") == ContractSpec("STK", "AAPL", "SMART", "USD")
 
 
+def test_resolve_contract_with_declared_listing():
+    spec = resolve_contract("SXR8", exchange="IBIS", currency="eur")
+    assert (spec.sec_type, spec.symbol, spec.exchange, spec.currency) == ("STK", "SXR8", "IBIS", "EUR")
+
+
+def test_resolve_contract_currency_without_exchange_uses_smart():
+    spec = resolve_contract("VUSA", currency="EUR")
+    assert (spec.exchange, spec.currency) == ("SMART", "EUR")
+
+
+def test_resolve_contract_without_listing_unchanged():
+    assert resolve_contract("AAPL") == ContractSpec("STK", "AAPL", "SMART", "USD")
+    assert resolve_contract("SPX").sec_type == "IND"
+
+
 @pytest.mark.parametrize(
     "days,expected", [(250, "250 D"), (365, "365 D"), (366, "2 Y"), (756, "3 Y")]
 )
