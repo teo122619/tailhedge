@@ -209,6 +209,20 @@ the **β·stocks coverage** — the SPX-equivalent notional your equity actually
 alongside the cycle budget computed on the total NAV. That way the hedge is sized to the
 risk your stocks contribute, while the spend is anchored to the whole book.
 
+The two numeric flags in the command do very different jobs:
+
+- **`--budget-pct`** is the annual hedging budget as a fraction of the declared NAV
+  (`0.01` = 1% per year, the default). It is the only knob on the money side: it sets the
+  cycle target `T = NAV × pct / cycles` (with `--cycles-per-year 6`, a $1,000,000 NAV at
+  1% gives $1,667 per bimonthly cycle) and, through it, the affordability slide, the
+  SPX→SPY fallback and the number of contracts on the ticket
+  (`⌊budget / (ask × multiplier)⌋`). It has no effect on the β regression or on which
+  strikes are considered — only on what you can pay for.
+- **`--r`** is the annualized risk-free rate (default `0.0`) used **solely** to discount
+  the forward in the Breeden–Litzenberger diagnostics. It affects neither strike
+  selection nor sizing: a roughly-right money-market rate is fine, and getting it wrong
+  only nudges the probability lines in the DIAGNOSTICS section.
+
 Portfolio files are **gitignored on purpose** (`*.xlsx` is in `.gitignore`): your holdings
 never end up in version control.
 
