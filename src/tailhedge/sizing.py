@@ -146,6 +146,16 @@ def run_sizing(
             "(close other IBKR sessions: mobile app, web, other Gateways; "
             "then logout/login in TWS and retry)."
         )
+    lengths = {t: int(s.notna().sum()) for t, s in cols.items()}
+    longest = max(lengths.values())
+    short = [t for t, n in lengths.items() if n < longest // 2]
+    if short:
+        detail = ", ".join(f"{t} ({lengths[t]} rows vs {longest})" for t in short)
+        raise InsufficientDataError(
+            f"Short history for: {detail}. The aligned panel would be truncated "
+            "to the short history and the beta estimated on the small overlap; "
+            "extend the history or remove the position."
+        )
     prices = pd.DataFrame(cols).dropna(how="any")
     if freq == "weekly":
         # Last common close of each week: neutralizes the EU/US close-time gap.

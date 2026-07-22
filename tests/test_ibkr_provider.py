@@ -51,7 +51,7 @@ def test_unresolved_ticker_names_the_symbol_not_the_connection():
     assert ib.hist_calls == 0   # historical data isn't requested for a non-existent contract
 
 
-def test_provider_uses_listing_for_contract(monkeypatch):
+def test_provider_uses_listing_for_contract():
     ib = _FakeIB(_bars())
     seen = {}
     orig = ib.qualifyContracts

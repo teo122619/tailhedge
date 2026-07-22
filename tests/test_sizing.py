@@ -130,6 +130,34 @@ def test_run_sizing_rejects_unknown_freq():
         run_sizing(prov, {"AAA": 1.0}, "SPX", [5], 10, freq="monthly")
 
 
+def test_run_sizing_raises_on_asymmetric_short_history():
+    # One young ETF with far less history than the rest of the panel: a plain
+    # joint dropna would silently truncate 200 business days of other data down
+    # to the 30-day overlap. That must raise, naming the offending ticker.
+    idx_long = pd.bdate_range("2023-01-02", periods=200)
+    idx_short = idx_long[-30:]
+    rng = np.random.default_rng(3)
+    spx_px = pd.Series(100 * np.cumprod(1 + rng.normal(0, 0.01, 200)), index=idx_long)
+    young_px = pd.Series(100 * np.cumprod(1 + rng.normal(0, 0.01, 30)), index=idx_short)
+    prov = FakePriceHistoryProvider({"SPX": spx_px, "YOUNG": young_px})
+    with pytest.raises(InsufficientDataError, match="YOUNG"):
+        run_sizing(prov, positions={"YOUNG": 1_000.0}, spx_ticker="SPX",
+                   windows=[10], lookback_days=200)
+
+
+def test_run_sizing_equal_length_panel_does_not_raise():
+    # Guard against a false positive: equal-length histories (e.g. all series
+    # short but symmetric) must NOT trigger the asymmetric-history guard.
+    idx = pd.bdate_range("2024-01-02", periods=30)
+    rng = np.random.default_rng(4)
+    spx_px = pd.Series(100 * np.cumprod(1 + rng.normal(0, 0.01, 30)), index=idx)
+    a_px = pd.Series(100 * np.cumprod(1 + rng.normal(0, 0.01, 30)), index=idx)
+    prov = FakePriceHistoryProvider({"SPX": spx_px, "A": a_px})
+    rep = run_sizing(prov, positions={"A": 1_000.0}, spx_ticker="SPX",
+                      windows=[10], lookback_days=30)
+    assert isinstance(rep, SizingReport)
+
+
 def test_weekly_freq_recovers_beta_hidden_by_stale_closes():
     # EU-style series: identical exposure to SPX but closes one day late.
     # Daily regression sees ~0 beta (iid returns, lag 1); weekly overlaps 4/5 days.

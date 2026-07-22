@@ -99,7 +99,7 @@ class Ticket:
     contracts: int
     premium_total: float
     budget: float
-    notional: float          # equity notional covered (β·stocks)
+    notional: float          # equity notional covered (β·portfolio)
     spot: float
     delta: float
     vega: float

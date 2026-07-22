@@ -50,7 +50,7 @@ def _format_table(table: pd.DataFrame) -> str:
 def run_advisor(
     chain: pd.DataFrame,
     spot: float,
-    notional: float,          # equity notional covered (β·stocks)
+    notional: float,          # equity notional covered (β·portfolio)
     today: date,
     select_expiry: str,
     target_delta: float,
@@ -128,7 +128,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--budget-pcts", default=None,
                    help="opt-in: levels to compare on the selected strike, e.g. 0.005,0.0075,0.01")
     g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--portfolio", help="portfolio spreadsheet (stocks + total NAV); created if missing")
+    g.add_argument("--portfolio", help="portfolio spreadsheet (positions + total NAV, USD); created if missing")
     g.add_argument("--notional", type=float, help="already-known notional to cover (coverage = NAV budget)")
     p.add_argument("--window", type=int, default=None,
                    help="beta window in observations (default: 250 daily / 52 weekly)")
@@ -227,9 +227,10 @@ def main(argv: list[str] | None = None) -> int:
                                  positions=positions, spx_ticker="SPX",
                                  windows=[window], lookback_days=a.lookback, freq=freq)
                 coverage_notional = rep.notional_by_window[window]
+                n_obs = int(rep.sensitivity["n_obs"].iloc[0])
                 sizing_note = (
                     f"Sizing: positions declared ${rep.nav:,.0f}, total NAV ${budget_nav:,.0f}, "
-                    f"window {window} ({freq}) → coverage ${coverage_notional:,.0f} "
+                    f"window {window} ({freq}, n={n_obs}) → coverage ${coverage_notional:,.0f} "
                     f"(R² {float(rep.sensitivity['r_squared'].iloc[0]):.2f})"
                 )
                 if listings:

@@ -110,21 +110,26 @@ def test_load_raises_on_non_xlsx_file(tmp_path):
         load_portfolio(str(path))
 
 
-def test_template_only_suggests_us_symbols_and_says_so(tmp_path):
-    """The template used to contain VUSA (a Vanguard ETF on the LSE): the tool
-    resolves it as STK/SMART/USD and IBKR returns Error 200, so the documented
-    'scaffold -> re-run' flow failed on the first run without explaining the constraint."""
+def test_template_documents_and_carries_non_us_listing_columns(tmp_path):
+    """The template deliberately ships a non-US example (SXR8 on IBIS/EUR): the
+    sheet must document how to fill exchange/currency for such listings, and
+    the example row itself must carry that listing in columns C/D, not just
+    describe it in prose."""
     import openpyxl
     from tailhedge.portfolio import load_portfolio, write_template
 
     path = tmp_path / "t.xlsx"
     write_template(path)
-    positions, _, _ = load_portfolio(path)
-    assert "VUSA" not in positions          # no non-US symbol among the examples
-    assert "VOO" in positions
     ws = openpyxl.load_workbook(path).active
+    assert ws["C6"].value == "exchange"
+    assert ws["D6"].value == "currency"
     text = " ".join(str(c.value) for r in ws.iter_rows() for c in r if c.value)
-    assert "USA" in text        # the constraint must be stated in the sheet, not discovered at runtime
+    assert "exchange" in text.lower() and "currency" in text.lower()
+    assert "Non-US" in text     # instructs filling exchange/currency for non-US listings
+
+    positions, _, listings = load_portfolio(path)
+    assert positions["SXR8"] == 120_000.0
+    assert listings["SXR8"] == ("IBIS", "EUR")
 
 
 def test_template_has_listing_columns_and_usd_label(tmp_path):
@@ -141,9 +146,10 @@ def test_load_returns_listings_for_declared_rows(tmp_path):
     path = tmp_path / "p.xlsx"
     _make_xlsx(path, 1_000_000,
                {"AAPL": 150_000, "SXR8": 120_000, "VUSA": 330_000},
-               listings={"SXR8": ("IBIS", "eur"), "VUSA": (None, "EUR")})
+               listings={"SXR8": ("ibis", "eur"), "VUSA": (None, "EUR")})
     positions, nav, listings = load_portfolio(str(path))
     assert positions["SXR8"] == 120_000.0
+    # lowercase declared exchange round-trips uppercase, symmetric with currency
     assert listings == {"SXR8": ("IBIS", "EUR"), "VUSA": (None, "EUR")}
 
 

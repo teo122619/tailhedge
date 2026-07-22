@@ -104,13 +104,13 @@ def load_portfolio(path) -> tuple[dict[str, float], float, dict[str, tuple[str |
                 raise ValueError(f"market_value missing or not numeric for '{t}'.")
             exch = row[2].value if len(row) > 2 else None
             cur = row[3].value if len(row) > 3 else None
-            exch = exch.strip() if isinstance(exch, str) and exch.strip() else None
+            exch = exch.strip().upper() if isinstance(exch, str) and exch.strip() else None
             cur = cur.strip().upper() if isinstance(cur, str) and cur.strip() else None
             if exch or cur:
                 listings[key] = (exch, cur)
 
     if not positions or all(v <= 0 for v in positions.values()):
-        raise ValueError("At least one stock position with market_value > 0 is required.")
+        raise ValueError("At least one position with market_value > 0 is required.")
     if nav_total is None or nav_total <= 0:
         raise ValueError("Total NAV missing or not positive ('Total NAV ...' row).")
     if nav_total < sum(positions.values()):

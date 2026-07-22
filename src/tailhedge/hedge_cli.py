@@ -74,7 +74,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Spitznagel lifecycle: roll at DTE 30 + moneyness-based purchase. Ticket-only.",
     )
     g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--portfolio", help="portfolio spreadsheet (stocks + total NAV); created if missing")
+    g.add_argument("--portfolio", help="portfolio spreadsheet (positions + total NAV, USD); created if missing")
     g.add_argument("--notional", type=float, help="already-known notional to cover (coverage = NAV budget)")
     p.add_argument("--budget-pct", type=_pct, default=0.01, help="budget %%/yr (default 0.01)")
     p.add_argument("--band", default="0.35,0.45", help="OTM band lo,hi (default 0.35,0.45)")
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     sizing_note = ""
     try:
         with IBKRConnection() as ib:
-            # 1. sizing: β·stocks coverage + NAV for the budget (see docs/strategy.md)
+            # 1. sizing: β·portfolio coverage + NAV for the budget (see docs/strategy.md)
             if a.portfolio:
                 freq, window = resolve_freq_window(a.returns_freq, a.window, bool(listings))
                 rep = run_sizing(IBKRPriceHistoryProvider(ib, listings=listings),

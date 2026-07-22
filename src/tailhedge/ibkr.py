@@ -41,7 +41,7 @@ def resolve_contract(ticker: str, exchange: str | None = None,
     t = ticker.upper()
     if exchange or currency:
         # Declared listing (portfolio sheet columns): always a stock/ETF line.
-        return ContractSpec("STK", t, exchange or "SMART", (currency or "USD").upper())
+        return ContractSpec("STK", t, (exchange or "SMART").upper(), (currency or "USD").upper())
     if t in _INDEX_EXCHANGE:
         return ContractSpec("IND", t, _INDEX_EXCHANGE[t], "USD")
     return ContractSpec("STK", t, "SMART", "USD")
@@ -162,6 +162,9 @@ class IBKRPriceHistoryProvider:
         exch, cur = self._listings.get(ticker, (None, None))
         contract = to_ib_contract(resolve_contract(ticker, exch, cur))
         self._ib.qualifyContracts(contract)
+        # conId 0 = IBKR did not recognize the symbol (Error 200). Say it here,
+        # where the cause is known: further downstream it just becomes an empty
+        # series, indistinguishable from a connection problem.
         if not getattr(contract, "conId", 0):
             raise MarketDataUnavailableError(
                 f"Ticker '{ticker}' not recognized by IBKR as "

@@ -50,6 +50,12 @@ def test_resolve_contract_with_declared_listing():
     assert (spec.sec_type, spec.symbol, spec.exchange, spec.currency) == ("STK", "SXR8", "IBIS", "EUR")
 
 
+def test_resolve_contract_uppercases_lowercase_declared_exchange():
+    # Symmetric with currency: a lowercase declared exchange must round-trip uppercase.
+    spec = resolve_contract("SXR8", exchange="ibis", currency="eur")
+    assert (spec.exchange, spec.currency) == ("IBIS", "EUR")
+
+
 def test_resolve_contract_currency_without_exchange_uses_smart():
     spec = resolve_contract("VUSA", currency="EUR")
     assert (spec.exchange, spec.currency) == ("SMART", "EUR")
