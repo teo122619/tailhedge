@@ -25,6 +25,7 @@ from tailhedge.lifecycle import (
     available_budget, cycle_budget, format_run_report, next_check_date, roll_due,
 )
 from tailhedge.paths import default_runs_dir
+from tailhedge.sizing import FX_CAVEAT
 
 _MAX_SANE_PCT = 0.10   # 10%/yr: beyond this it's almost certainly a unit error
 
@@ -56,6 +57,17 @@ def _cycles(raw: str) -> int:
     return v
 
 
+def format_sizing_note(declared: float, nav: float, coverage: float, r_squared: float,
+                       n_obs: int, freq: str, has_listings: bool) -> str:
+    """Build the sizing block note: positions, NAV, coverage, beta stats, and FX caveat if applicable."""
+    note = (f"Sizing: positions ${declared:,.0f}, total NAV ${nav:,.0f}, "
+            f"β·portfolio coverage ${coverage:,.0f} "
+            f"(R² {r_squared:.2f}, n={n_obs}, {freq} returns)")
+    if has_listings:
+        note += "\n" + FX_CAVEAT
+    return note
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="tailhedge.hedge",
@@ -71,7 +83,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cycles-per-year", type=_cycles, default=6, help="cycles/year (6 = bimonthly)")
     p.add_argument("--exclude-conids", default="", help="conIds to EXCLUDE from the hedge")
     p.add_argument("--force-underlying", choices=["SPX", "SPY"], default=None)
-    p.add_argument("--window", type=int, default=250, help="beta window (with --portfolio)")
+    p.add_argument("--window", type=int, default=None,
+                   help="beta window in observations (default: 250 daily / 52 weekly)")
+    p.add_argument("--returns-freq", choices=("auto", "daily", "weekly"), default="auto",
+                   help="regression frequency; auto = weekly when a non-US listing is declared")
     p.add_argument("--lookback", type=int, default=756)
     p.add_argument("--r", type=float, default=0.0, help="rate for the B-L CDF")
     p.add_argument("--out-dir", default=None, help="default: ./runs")
@@ -109,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         available_expiries, expiries_in_dte_range, fetch_put_chain, fetch_spot,
         fetch_puts_multi, list_option_params, read_hedge_book,
     )
-    from tailhedge.sizing import InsufficientDataError, run_sizing
+    from tailhedge.sizing import InsufficientDataError, resolve_freq_window, run_sizing
 
     today = date.today()
     sizing_note = ""
@@ -117,15 +132,15 @@ def main(argv: list[str] | None = None) -> int:
         with IBKRConnection() as ib:
             # 1. sizing: β·stocks coverage + NAV for the budget (see docs/strategy.md)
             if a.portfolio:
-                rep = run_sizing(IBKRPriceHistoryProvider(ib), positions=positions,
-                                 spx_ticker="SPX", windows=[a.window],
-                                 lookback_days=a.lookback)
-                coverage = rep.notional_by_window[a.window]
-                sizing_note = (
-                    f"Sizing: stocks ${rep.nav:,.0f}, total NAV ${nav:,.0f}, "
-                    f"β·stocks coverage ${coverage:,.0f} "
-                    f"(R² {float(rep.sensitivity['r_squared'].iloc[0]):.2f})"
-                )
+                freq, window = resolve_freq_window(a.returns_freq, a.window, bool(listings))
+                rep = run_sizing(IBKRPriceHistoryProvider(ib, listings=listings),
+                                 positions=positions, spx_ticker="SPX",
+                                 windows=[window], lookback_days=a.lookback, freq=freq)
+                coverage = rep.notional_by_window[window]
+                row0 = rep.sensitivity.iloc[0]
+                sizing_note = format_sizing_note(
+                    rep.nav, nav, coverage, float(row0["r_squared"]),
+                    int(row0["n_obs"]), freq, bool(listings))
             else:
                 coverage = a.notional
                 nav = a.notional

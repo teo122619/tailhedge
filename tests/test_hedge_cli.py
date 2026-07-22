@@ -80,3 +80,29 @@ def test_connection_error_is_clean(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "Cannot connect to TWS/IB Gateway" in err
     assert "Traceback" not in err
+
+
+def test_parser_freq_defaults():
+    p = _build_parser()
+    a = p.parse_args(["--notional", "500000"])
+    assert a.returns_freq == "auto"
+    assert a.window is None
+
+
+def test_sizing_note_declares_freq_and_fx_caveat():
+    from tailhedge.hedge_cli import format_sizing_note
+    note = format_sizing_note(declared=700_000, nav=1_000_000, coverage=630_000,
+                              r_squared=0.82, n_obs=52, freq="weekly",
+                              has_listings=True)
+    assert "weekly returns" in note
+    assert "n=52" in note
+    assert "quotation currencies" in note
+
+
+def test_sizing_note_us_only_has_no_fx_caveat():
+    from tailhedge.hedge_cli import format_sizing_note
+    note = format_sizing_note(declared=700_000, nav=1_000_000, coverage=630_000,
+                              r_squared=0.82, n_obs=250, freq="daily",
+                              has_listings=False)
+    assert "daily returns" in note
+    assert "quotation currencies" not in note
